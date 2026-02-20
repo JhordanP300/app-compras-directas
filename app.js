@@ -123,7 +123,7 @@ function handleAuthChange(user) {
   }
 }
 
-window.doLogin = async function() {
+window.Login = async function() {
   const email    = document.getElementById("loginEmail").value.trim();
   const password = document.getElementById("loginPassword").value;
   const btnLogin = document.getElementById("btnLogin");
