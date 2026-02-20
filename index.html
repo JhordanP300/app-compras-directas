@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="theme-color" content="#00d4ff"/>
+  <meta name="description" content="StoreDesk — Gestión de compras directas y entregas en almacén"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="StoreDesk"/>
+
+  <title>StoreDesk — Compras Directas</title>
+
+  <!-- PWA Manifest -->
+  <link rel="manifest" href="./manifest.json"/>
+
+  <!-- Apple Touch Icon (iOS) -->
+  <link rel="apple-touch-icon" href="./icons/icon-192.png"/>
+
+  <!-- Fuentes -->
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet"/>
+
+  <!-- Estilos -->
+  <link rel="stylesheet" href="/styles.css"/>
+
+  <!-- Librerías externas -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════════════════
+     MOBILE SIDEBAR TOGGLE
+══════════════════════════════════════════════════════════════ -->
+<button class="menu-toggle" onclick="toggleSidebar()" aria-label="Abrir menú">☰</button>
+
+<!-- ════════════════════════════════════════════════════════════
+     SIDEBAR DE NAVEGACIÓN
+══════════════════════════════════════════════════════════════ -->
+<nav class="sidebar" id="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-mark">Store<span>Desk</span></div>
+    <div class="logo-sub">Gestión de Almacén</div>
+  </div>
+
+  <div class="nav">
+    <div class="nav-item active" onclick="goTo('dashboard')">
+      <span class="nav-icon">📊</span> Dashboard
+    </div>
+    <div class="nav-item" onclick="goTo('registro')">
+      <span class="nav-icon">➕</span> Nuevo Registro
+    </div>
+    <div class="nav-item" onclick="goTo('historial')">
+      <span class="nav-icon">📋</span> Historial
+      <span class="nav-badge" id="histBadge">0</span>
+    </div>
+    <div class="nav-item" onclick="goTo('reportes')">
+      <span class="nav-icon">📄</span> Reportes
+    </div>
+  </div>
+
+  <div class="sidebar-footer">
+    <div class="user-pill" onclick="doLogout()" title="Cerrar sesión">
+      <div class="user-avatar" id="userInitials">--</div>
+      <div>
+        <div style="font-size:13px;font-weight:500;color:var(--text)" id="userEmail">...</div>
+        <div style="font-size:11px;color:var(--text3)">Cerrar sesión →</div>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<!-- ════════════════════════════════════════════════════════════
+     CONTENIDO PRINCIPAL
+══════════════════════════════════════════════════════════════ -->
+<main class="main">
+
+  <!-- ─── DASHBOARD ──────────────────────────────────────────── -->
+  <section class="page active" id="page-dashboard">
+    <div class="topbar">
+      <div>
+        <div class="page-title">Panel <span>Principal</span></div>
+        <div style="font-size:14px;color:var(--text2);margin-top:4px" id="dash-date"></div>
+      </div>
+      <div class="topbar-right">
+        <div class="chip">
+          <div class="dot" id="connDot"></div>
+          <span id="connText">Verificando...</span>
+          <span class="queue-badge" id="queueBadge"></span>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="goTo('registro')">+ Nuevo</button>
+      </div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Entregas Hoy</div>
+        <div class="stat-value blue" id="statHoy">0</div>
+        <div class="stat-delta">Compras directas</div>
+        <div class="stat-icon">📦</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Completadas</div>
+        <div class="stat-value green" id="statComp">0</div>
+        <div class="stat-delta">Entregadas con firma</div>
+        <div class="stat-icon">✅</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Pendientes</div>
+        <div class="stat-value yellow" id="statPend">0</div>
+        <div class="stat-delta">Sin recoger</div>
+        <div class="stat-icon">⏳</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Total Histórico</div>
+        <div class="stat-value purple" id="statTotal">0</div>
+        <div class="stat-delta">Todos los registros</div>
+        <div class="stat-icon">🗃️</div>
+      </div>
+    </div>
+
+    <div class="dash-grid">
+      <div class="card">
+        <div class="card-title"><div class="card-title-icon">📈</div> Actividad últimos 7 días</div>
+        <div class="chart-area" id="chartBars"></div>
+      </div>
+      <div class="card">
+        <div class="card-title"><div class="card-title-icon">🎯</div> Por Estado</div>
+        <div class="donut-wrap">
+          <canvas id="donutCanvas" width="130" height="130"></canvas>
+          <div class="donut-legend" id="donutLegend"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><div class="card-title-icon">🕒</div> Últimas Entregas</div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>OC / MNT</th><th>Centro de Costos</th><th>Receptor</th>
+              <th>Área</th><th>Fecha</th><th>Estado</th>
+            </tr>
+          </thead>
+          <tbody id="dashTableBody">
+            <tr><td colspan="6">
+              <div class="empty"><div class="empty-icon">📭</div><div class="empty-text">No hay registros aún</div></div>
+            </td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── NUEVO REGISTRO ─────────────────────────────────────── -->
+  <section class="page" id="page-registro">
+    <div class="topbar">
+      <div>
+        <div class="page-title">Nuevo <span>Registro</span></div>
+        <div style="font-size:14px;color:var(--text2);margin-top:4px">Compra directa — ingreso al almacén</div>
+      </div>
+    </div>
+
+    <!-- Indicador de pasos -->
+    <div class="steps">
+      <div class="step active" id="step1">
+        <div class="step-num">1</div>
+        <div class="step-label">Datos de la OC</div>
+      </div>
+      <div class="step-line"></div>
+      <div class="step" id="step2">
+        <div class="step-num">2</div>
+        <div class="step-label">Receptor</div>
+      </div>
+      <div class="step-line"></div>
+      <div class="step" id="step3">
+        <div class="step-num">3</div>
+        <div class="step-label">Firma & Entrega</div>
+      </div>
+    </div>
+
+    <!-- Paso 1: Datos de la compra -->
+    <div id="formStep1">
+      <div class="alert alert-info">
+        💡 Puedes escanear el código QR o de barras del documento para autocompletar los campos.
+      </div>
+      <div class="card">
+        <div class="card-title"><div class="card-title-icon">🔖</div> Información de la Compra</div>
+        <div class="form-grid">
+          <div class="field">
+            <label>Orden de Compra (OC) *</label>
+            <div class="input-scan">
+              <input type="text" id="fOC" placeholder="Ej: OC-2024-00123"/>
+              <button class="scan-btn" onclick="openScanner('oc')" title="Escanear código">⊡</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>MNT — Mantenimiento</label>
+            <div class="input-scan">
+              <input type="text" id="fMNT" placeholder="Ej: MNT-4521"/>
+              <button class="scan-btn" onclick="openScanner('mnt')" title="Escanear código">⊡</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>Centro de Costos (CC) *</label>
+            <div class="input-scan">
+              <input type="text" id="fCC" placeholder="Ej: CC-100-200"/>
+              <button class="scan-btn" onclick="openScanner('cc')" title="Escanear código">⊡</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>Proveedor</label>
+            <input type="text" id="fProveedor" placeholder="Nombre del proveedor"/>
+          </div>
+          <div class="field">
+            <label>Descripción del Artículo *</label>
+            <input type="text" id="fDescripcion" placeholder="Descripción del material o repuesto"/>
+          </div>
+          <div class="field">
+            <label>Cantidad</label>
+            <input type="number" id="fCantidad" placeholder="1" min="1"/>
+          </div>
+          <div class="field">
+            <label>Número de Guía / Remisión</label>
+            <input type="text" id="fGuia" placeholder="Ej: GU-987654"/>
+          </div>
+          <div class="field">
+            <label>Fecha de Llegada</label>
+            <input type="date" id="fFechaLlegada"/>
+          </div>
+          <div class="field full">
+            <label>Observaciones / Novedades</label>
+            <textarea id="fObservaciones" placeholder="Daños, faltantes, observaciones importantes..."></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="flex-end">
+        <button class="btn btn-primary" onclick="nextStep(2)">Siguiente → Datos del Receptor</button>
+      </div>
+    </div>
+
+    <!-- Paso 2: Datos del receptor -->
+    <div id="formStep2" class="hidden">
+      <div class="card">
+        <div class="card-title"><div class="card-title-icon">👤</div> Datos del Receptor</div>
+        <div class="form-grid">
+          <div class="field">
+            <label>Nombre Completo *</label>
+            <input type="text" id="fNombre" placeholder="Nombres y apellidos"/>
+          </div>
+          <div class="field">
+            <label>Cédula / ID *</label>
+            <input type="text" id="fCedula" placeholder="Número de documento"/>
+          </div>
+          <div class="field">
+            <label>Área / Departamento *</label>
+            <select id="fArea">
+              <option value="">— Seleccione —</option>
+              <option>Mantenimiento</option>
+              <option>Producción</option>
+              <option>Operaciones</option>
+              <option>Ingeniería</option>
+              <option>Calidad</option>
+              <option>Logística</option>
+              <option>Administrativo</option>
+              <option>Gerencia</option>
+              <option>Otro</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Cargo</label>
+            <input type="text" id="fCargo" placeholder="Cargo del receptor"/>
+          </div>
+          <div class="field">
+            <label>Teléfono / Extensión</label>
+            <input type="text" id="fTel" placeholder="Ext. o celular"/>
+          </div>
+          <div class="field">
+            <label>Correo Electrónico</label>
+            <input type="email" id="fEmail" placeholder="correo@empresa.com"/>
+          </div>
+        </div>
+      </div>
+      <div class="flex-end">
+        <button class="btn btn-secondary" onclick="nextStep(1)">← Atrás</button>
+        <button class="btn btn-primary" onclick="nextStep(3)">Siguiente → Firma y Entrega</button>
+      </div>
+    </div>
+
+    <!-- Paso 3: Firma y entrega -->
+    <div id="formStep3" class="hidden">
+      <div class="card">
+        <div class="card-title"><div class="card-title-icon">✍️</div> Firma Digital del Receptor</div>
+        <p style="font-size:14px;color:var(--text2);margin-bottom:16px">
+          Solicite al receptor que firme en el área de abajo con el dedo o mouse.
+        </p>
+        <div class="sig-wrap">
+          <canvas id="sigCanvas" height="200"></canvas>
+        </div>
+        <div class="sig-tools">
+          <button class="btn btn-secondary btn-sm" onclick="clearSig()">🗑 Limpiar firma</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title"><div class="card-title-icon">📌</div> Estado de Entrega</div>
+        <div class="form-grid cols-3">
+          <div class="field">
+            <label>Estado *</label>
+            <select id="fEstado">
+              <option value="entregado">✅ Entregado</option>
+              <option value="pendiente">⏳ Pendiente de entrega</option>
+              <option value="novedad">⚠️ Con Novedad</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Hora de Entrega</label>
+            <input type="time" id="fHoraEntrega"/>
+          </div>
+          <div class="field">
+            <label>Responsable Almacén *</label>
+            <input type="text" id="fResponsable" placeholder="Tu nombre"/>
+          </div>
+        </div>
+      </div>
+      <div class="flex-end">
+        <button class="btn btn-secondary" onclick="nextStep(2)">← Atrás</button>
+        <button class="btn btn-primary" onclick="guardarRegistro()">💾 Guardar en la Nube</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── HISTORIAL ──────────────────────────────────────────── -->
+  <section class="page" id="page-historial">
+    <div class="topbar">
+      <div class="page-title">Historial <span>de Entregas</span></div>
+      <div class="topbar-right">
+        <button class="btn btn-success btn-sm" onclick="exportarExcel()">⬇ CSV / Excel</button>
+        <button class="btn btn-secondary btn-sm" onclick="exportarPDF()">⬇ PDF</button>
+      </div>
+    </div>
+    <div class="filter-bar">
+      <input type="text" placeholder="🔍  Buscar OC, nombre, CC..." id="searchInput" oninput="renderHistorial()" style="min-width:240px"/>
+      <select id="filterEstado" onchange="renderHistorial()">
+        <option value="">Todos los estados</option>
+        <option value="entregado">✅ Entregado</option>
+        <option value="pendiente">⏳ Pendiente</option>
+        <option value="novedad">⚠️ Novedad</option>
+      </select>
+      <select id="filterArea" onchange="renderHistorial()">
+        <option value="">Todas las áreas</option>
+        <option>Mantenimiento</option><option>Producción</option><option>Operaciones</option>
+        <option>Ingeniería</option><option>Calidad</option><option>Logística</option>
+        <option>Administrativo</option><option>Gerencia</option><option>Otro</option>
+      </select>
+      <input type="date" id="filterFecha" onchange="renderHistorial()" title="Filtrar por fecha de llegada"/>
+      <div class="spacer"></div>
+      <span style="font-size:13px;color:var(--text2)" id="filterCount"></span>
+    </div>
+    <div class="card" style="padding:0">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th><th>OC</th><th>MNT</th><th>CC</th>
+              <th>Receptor</th><th>Área</th><th>Fecha</th><th>Estado</th><th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="histTableBody">
+            <tr><td colspan="9">
+              <div class="empty"><div class="empty-icon">📭</div><div class="empty-text">Cargando registros...</div></div>
+            </td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── REPORTES ───────────────────────────────────────────── -->
+  <section class="page" id="page-reportes">
+    <div class="topbar">
+      <div class="page-title">Centro de <span>Reportes</span></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+      <div class="card" style="cursor:pointer" onclick="exportarPDF()">
+        <div style="font-size:36px;margin-bottom:12px">📄</div>
+        <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:700;margin-bottom:6px">Reporte PDF Completo</div>
+        <div style="font-size:14px;color:var(--text2)">Genera un reporte formateado de todas las entregas. Ideal para auditorías internas.</div>
+        <div class="mt-4"><span class="badge badge-blue">Incluye firmas</span></div>
+      </div>
+      <div class="card" style="cursor:pointer" onclick="exportarExcel()">
+        <div style="font-size:36px;margin-bottom:12px">📊</div>
+        <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:700;margin-bottom:6px">Exportar a Excel / CSV</div>
+        <div style="font-size:14px;color:var(--text2)">Descarga todos los datos en formato CSV compatible con Excel y Google Sheets.</div>
+        <div class="mt-4"><span class="badge badge-green">Listo para Excel</span></div>
+      </div>
+    </div>
+
+    <div class="card mt-4">
+      <div class="card-title"><div class="card-title-icon">📅</div> Exportar por Rango de Fechas</div>
+      <div class="form-grid cols-3">
+        <div class="field">
+          <label>Fecha Inicio</label>
+          <input type="date" id="rptDesde"/>
+        </div>
+        <div class="field">
+          <label>Fecha Fin</label>
+          <input type="date" id="rptHasta"/>
+        </div>
+        <div class="field">
+          <label>Filtrar por Área</label>
+          <select id="rptArea">
+            <option value="">Todas las áreas</option>
+            <option>Mantenimiento</option><option>Producción</option>
+            <option>Operaciones</option><option>Ingeniería</option>
+            <option>Calidad</option><option>Logística</option>
+          </select>
+        </div>
+      </div>
+      <div class="mt-4 flex-end">
+        <button class="btn btn-primary" onclick="exportarRangoCSV()">📥 Exportar Rango</button>
+      </div>
+    </div>
+  </section>
+
+</main><!-- /main -->
+
+<!-- ════════════════════════════════════════════════════════════
+     MODAL — LOGIN
+══════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay open" id="loginModal">
+  <div class="modal login-modal">
+    <div class="login-header">
+      <div class="login-logo">Store<span>Desk</span></div>
+      <div class="login-sub">Inicia sesión para continuar</div>
+    </div>
+    <div class="login-error" id="loginError"></div>
+    <div class="form-grid cols-1" style="gap:14px">
+      <div class="field">
+        <label>Correo Electrónico</label>
+        <input type="email" id="loginEmail" placeholder="correo@empresa.com" autocomplete="email"/>
+      </div>
+      <div class="field">
+        <label>Contraseña</label>
+        <input type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password"/>
+      </div>
+    </div>
+    <div style="margin-top:20px">
+      <button class="btn btn-primary" id="btnLogin" onclick="doLogin()" style="width:100%;justify-content:center">
+        Iniciar Sesión
+      </button>
+    </div>
+    <p style="font-size:12px;color:var(--text3);text-align:center;margin-top:16px">
+      ¿Sin cuenta? Pídele al administrador que te cree un usuario en Firebase Authentication.
+    </p>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════
+     MODAL — ESCÁNER QR / CÓDIGO DE BARRAS
+══════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="scannerModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">📷 Escanear Código</div>
+      <button class="modal-close" onclick="closeScanner()">×</button>
+    </div>
+    <div class="scan-mode-tabs">
+      <button class="tab-btn active" id="tabCam" onclick="switchScanMode('cam')">📷 Cámara</button>
+      <button class="tab-btn" id="tabManual" onclick="switchScanMode('manual')">⌨️ Manual</button>
+    </div>
+    <div id="scanCamView">
+      <div id="qr-reader" style="width:100%"></div>
+      <div class="scan-result" id="scanResult">
+        ✅ Código leído: <strong id="scanValue"></strong>
+      </div>
+    </div>
+    <div id="scanManualView" class="hidden">
+      <div class="field">
+        <label>Ingresa el código manualmente</label>
+        <input type="text" id="manualCode" placeholder="Escribe o pega el código aquí..."/>
+      </div>
+      <div class="mt-4 flex-end">
+        <button class="btn btn-primary" onclick="applyManualCode()">Aplicar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════
+     MODAL — DETALLE DE REGISTRO
+══════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="detalleModal">
+  <div class="modal" style="width:640px">
+    <div class="modal-header">
+      <div class="modal-title">📋 Detalle del Registro</div>
+      <button class="modal-close" onclick="closeDetalle()">×</button>
+    </div>
+    <div id="detalleContent"></div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════
+     BANNER INSTALACIÓN PWA
+══════════════════════════════════════════════════════════════ -->
+<div class="install-banner" id="installBanner">
+  <span>📲 Instala StoreDesk como app</span>
+  <button class="btn btn-primary btn-sm" id="installBtn">Instalar</button>
+  <button class="btn btn-secondary btn-sm" onclick="document.getElementById('installBanner').classList.remove('show')">✕</button>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════
+     NOTIFICACIONES TOAST
+══════════════════════════════════════════════════════════════ -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- ════════════════════════════════════════════════════════════
+     SCRIPTS — Módulos ES6
+══════════════════════════════════════════════════════════════ -->
+<script type="module" src="./js/app.js"></script>
+
+<!-- ════════════════════════════════════════════════════════════
+     PWA — Registro del Service Worker e instalación
+══════════════════════════════════════════════════════════════ -->
+<script>
+  // ── Registro del Service Worker ────────────────────────────
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("./sw.js")
+        .then(reg => {
+          console.log("[PWA] Service Worker registrado:", reg.scope);
+
+          // Escuchar mensaje del SW para sincronizar cola offline
+          navigator.serviceWorker.addEventListener("message", (event) => {
+            if (event.data?.type === "SYNC_QUEUE") {
+              // La función sincronizarQueue está en app.js
+              // Se dispara automáticamente cuando el SW notifica
+              window.dispatchEvent(new Event("online"));
+            }
+          });
+        })
+        .catch(err => console.error("[PWA] Error SW:", err));
+    });
+  }
+
+  // ── Banner de instalación PWA ───────────────────────────────
+  let deferredPrompt = null;
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    document.getElementById("installBanner").classList.add("show");
+  });
+
+  document.getElementById("installBtn").addEventListener("click", async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === "accepted") {
+      document.getElementById("installBanner").classList.remove("show");
+    }
+    deferredPrompt = null;
+  });
+
+  window.addEventListener("appinstalled", () => {
+    document.getElementById("installBanner").classList.remove("show");
+    console.log("[PWA] App instalada exitosamente");
+  });
+</script>
+
+<script type="module">
+  // Import the functions you need from the SDKs you need
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
+  // TODO: Add SDKs for Firebase products that you want to use
+  // https://firebase.google.com/docs/web/setup#available-libraries
+
+  // Your web app's Firebase configuration
+  const firebaseConfig = {
+    apiKey: "AIzaSyCkn9gkx0l3ZmZ1LZ4r73SUmdVPp7fl7BM",
+    authDomain: "compras-directas-9296d.firebaseapp.com",
+    projectId: "compras-directas-9296d",
+    storageBucket: "compras-directas-9296d.firebasestorage.app",
+    messagingSenderId: "496654434159",
+    appId: "1:496654434159:web:9b99b108b203ae0b02729a"
+  };
+
+  // Initialize Firebase
+  const app = initializeApp(firebaseConfig);
+</script>
+</body>
+</html>
