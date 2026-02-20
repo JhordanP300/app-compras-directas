@@ -22,7 +22,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet"/>
 
   <!-- Estilos -->
-  <link rel="stylesheet" href="/styles.css"/>
+  <link rel="stylesheet" href="./css/styles.css"/>
 
   <!-- Librerías externas -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js" defer></script>
@@ -61,11 +61,11 @@
   </div>
 
   <div class="sidebar-footer">
-    <div class="user-pill" onclick="doLogout()" title="Cerrar sesión">
-      <div class="user-avatar" id="userInitials">--</div>
+    <div class="user-pill">
+      <div class="user-avatar">AL</div>
       <div>
-        <div style="font-size:13px;font-weight:500;color:var(--text)" id="userEmail">...</div>
-        <div style="font-size:11px;color:var(--text3)">Cerrar sesión →</div>
+        <div style="font-size:13px;font-weight:500;color:var(--text)">Almacén</div>
+        <div style="font-size:11px;color:var(--text3)">StoreDesk v2.1</div>
       </div>
     </div>
   </div>
@@ -426,36 +426,7 @@
 
 </main><!-- /main -->
 
-<!-- ════════════════════════════════════════════════════════════
-     MODAL — LOGIN
-══════════════════════════════════════════════════════════════ -->
-<div class="modal-overlay open" id="loginModal">
-  <div class="modal login-modal">
-    <div class="login-header">
-      <div class="login-logo">Store<span>Desk</span></div>
-      <div class="login-sub">Inicia sesión para continuar</div>
-    </div>
-    <div class="login-error" id="loginError"></div>
-    <div class="form-grid cols-1" style="gap:14px">
-      <div class="field">
-        <label>Correo Electrónico</label>
-        <input type="email" id="loginEmail" placeholder="correo@empresa.com" autocomplete="email"/>
-      </div>
-      <div class="field">
-        <label>Contraseña</label>
-        <input type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password"/>
-      </div>
-    </div>
-    <div style="margin-top:20px">
-      <button class="btn btn-primary" id="btnLogin" onclick="Login()" style="width:100%;justify-content:center">
-        Iniciar Sesión
-      </button>
-    </div>
-    <p style="font-size:12px;color:var(--text3);text-align:center;margin-top:16px">
-      ¿Sin cuenta? Pídele al administrador que te cree un usuario en Firebase Authentication.
-    </p>
-  </div>
-</div>
+<!-- Login eliminado — acceso directo sin autenticación -->
 
 <!-- ════════════════════════════════════════════════════════════
      MODAL — ESCÁNER QR / CÓDIGO DE BARRAS
@@ -568,25 +539,7 @@
   });
 </script>
 
-<script type="module">
-  // Import the functions you need from the SDKs you need
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
-  // TODO: Add SDKs for Firebase products that you want to use
-  // https://firebase.google.com/docs/web/setup#available-libraries
-
-  // Your web app's Firebase configuration
-  const firebaseConfig = {
-    apiKey: "AIzaSyCkn9gkx0l3ZmZ1LZ4r73SUmdVPp7fl7BM",
-    authDomain: "compras-directas-9296d.firebaseapp.com",
-    projectId: "compras-directas-9296d",
-    storageBucket: "compras-directas-9296d.firebasestorage.app",
-    messagingSenderId: "496654434159",
-    appId: "1:496654434159:web:9b99b108b203ae0b02729a"
-  };
-
-  // Initialize Firebase
-  const app = initializeApp(firebaseConfig);
-</script>
+<!-- Firebase se inicializa únicamente en js/firebase.js -->
 
 </body>
 </html>

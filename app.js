@@ -1,11 +1,8 @@
 // ═══════════════════════════════════════════════════════════════
-// app.js — Lógica principal de StoreDesk v2.0
+// app.js — StoreDesk v2.1 (sin autenticación)
 // ═══════════════════════════════════════════════════════════════
 
 import {
-  login,
-  logout,
-  onAuthChange,
   guardarRegistroCloud,
   eliminarRegistroCloud,
   escucharRegistros,
@@ -19,27 +16,23 @@ import {
 // ═══════════════════════════════════════════════════════════════
 // ESTADO GLOBAL
 // ═══════════════════════════════════════════════════════════════
-let registros       = [];       // Array en memoria con datos de Firestore
-let unsubListen     = null;     // Función para cancelar listener de Firestore
-let currentStep     = 1;
-let sigCtx          = null;
-let sigDrawing      = false;
-let html5Qr         = null;
-let scannerRunning  = false;
-let scanTarget      = "oc";
-let onlineStatus    = navigator.onLine;
+let registros      = [];
+let unsubListen    = null;
+let currentStep    = 1;
+let sigCtx         = null;
+let sigDrawing     = false;
+let html5Qr        = null;
+let scannerRunning = false;
+let scanTarget     = "oc";
+let onlineStatus   = navigator.onLine;
 
 // ═══════════════════════════════════════════════════════════════
-// INIT
+// INIT — arranca directo, sin login
 // ═══════════════════════════════════════════════════════════════
 document.addEventListener("DOMContentLoaded", () => {
-  // Fecha de hoy en formulario
   document.getElementById("fFechaLlegada").value = new Date().toISOString().split("T")[0];
 
-  // Escuchar cambios de auth
-  onAuthChange(handleAuthChange);
-
-  // Eventos de conectividad
+  // Conectividad
   window.addEventListener("online",  handleOnline);
   window.addEventListener("offline", handleOffline);
   updateConnStatus();
@@ -51,17 +44,11 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("detalleModal").addEventListener("click", e => {
     if (e.target === document.getElementById("detalleModal")) closeDetalle();
   });
-  document.getElementById("loginModal").addEventListener("click", e => {
-    // El login modal no se cierra haciendo clic afuera (es obligatorio)
-  });
 
-  // Enter en login
-  document.getElementById("loginPassword").addEventListener("keydown", e => {
-    if (e.key === "Enter") doLogin();
-  });
-  document.getElementById("loginEmail").addEventListener("keydown", e => {
-    if (e.key === "Enter") doLogin();
-  });
+  // Arrancar escucha de Firestore inmediatamente
+  startListening();
+  updateDashboard();
+  updateBadge();
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -73,98 +60,29 @@ async function handleOnline() {
   const count = contarQueue();
   if (count > 0) {
     const synced = await sincronizarQueue();
-    if (synced > 0) toast(`✅ ${synced} registro(s) sincronizados desde modo offline`, "success");
+    if (synced > 0) toast(`✅ ${synced} registro(s) sincronizados`, "success");
   }
 }
 
 function handleOffline() {
   onlineStatus = false;
   updateConnStatus();
-  toast("⚡ Sin conexión — los registros se guardarán localmente", "info");
+  toast("⚡ Sin conexión — se guardará localmente", "info");
 }
 
 function updateConnStatus() {
-  const dot  = document.getElementById("connDot");
-  const text = document.getElementById("connText");
+  const dot    = document.getElementById("connDot");
+  const text   = document.getElementById("connText");
   if (!dot || !text) return;
-  if (onlineStatus) {
-    dot.style.background = "var(--accent3)";
-    text.textContent = "En línea";
-  } else {
-    dot.style.background = "var(--warn)";
-    text.textContent = "Sin conexión";
-  }
+  dot.style.background = onlineStatus ? "var(--accent3)" : "var(--warn)";
+  text.textContent     = onlineStatus ? "En línea" : "Sin conexión";
+
   const queueCount = contarQueue();
-  const queueEl = document.getElementById("queueBadge");
+  const queueEl    = document.getElementById("queueBadge");
   if (queueEl) {
     queueEl.style.display = queueCount > 0 ? "inline-flex" : "none";
-    queueEl.textContent = `${queueCount} pendiente(s)`;
+    queueEl.textContent   = `${queueCount} pendiente(s)`;
   }
-}
-
-// ═══════════════════════════════════════════════════════════════
-// AUTENTICACIÓN
-// ═══════════════════════════════════════════════════════════════
-function handleAuthChange(user) {
-  if (user) {
-    // Usuario autenticado
-    document.getElementById("loginModal").classList.remove("open");
-    document.getElementById("userEmail").textContent = user.email;
-    document.getElementById("userInitials").textContent = user.email.slice(0,2).toUpperCase();
-    startListening();
-    updateDashboard();
-    updateBadge();
-    updateConnStatus();
-  } else {
-    // No autenticado → mostrar login
-    stopListening();
-    document.getElementById("loginModal").classList.add("open");
-    document.getElementById("loginError").style.display = "none";
-  }
-}
-
-window.Login = async function() {
-  const email    = document.getElementById("loginEmail").value.trim();
-  const password = document.getElementById("loginPassword").value;
-  const btnLogin = document.getElementById("btnLogin");
-  const errEl    = document.getElementById("loginError");
-
-  if (!email || !password) {
-    errEl.textContent = "Completa todos los campos";
-    errEl.style.display = "block";
-    return;
-  }
-  btnLogin.disabled = true;
-  btnLogin.textContent = "Ingresando...";
-  errEl.style.display = "none";
-
-  try {
-    await login(email, password);
-    // onAuthChange se dispara automáticamente
-  } catch (err) {
-    errEl.textContent = traducirErrorAuth(err.code);
-    errEl.style.display = "block";
-    btnLogin.disabled = false;
-    btnLogin.textContent = "Iniciar Sesión";
-  }
-};
-
-window.doLogout = async function() {
-  if (!confirm("¿Cerrar sesión?")) return;
-  stopListening();
-  await logout();
-};
-
-function traducirErrorAuth(code) {
-  const msgs = {
-    "auth/invalid-email":        "Correo inválido",
-    "auth/user-not-found":       "Usuario no encontrado",
-    "auth/wrong-password":       "Contraseña incorrecta",
-    "auth/invalid-credential":   "Credenciales incorrectas",
-    "auth/too-many-requests":    "Demasiados intentos. Espera un momento.",
-    "auth/network-request-failed": "Sin conexión a internet",
-  };
-  return msgs[code] || `Error: ${code}`;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -175,16 +93,10 @@ function startListening() {
   unsubListen = escucharRegistros((data) => {
     registros = data;
     updateBadge();
-    // Refrescar la vista activa
     const activePage = document.querySelector(".page.active");
     if (activePage?.id === "page-dashboard") updateDashboard();
     if (activePage?.id === "page-historial") renderHistorial();
   });
-}
-
-function stopListening() {
-  if (unsubListen) { unsubListen(); unsubListen = null; }
-  registros = [];
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -194,7 +106,7 @@ window.goTo = function(page) {
   document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
   document.querySelectorAll(".nav-item").forEach(n => n.classList.remove("active"));
   document.getElementById("page-" + page).classList.add("active");
-  const pages = ["dashboard","registro","historial","reportes"];
+  const pages = ["dashboard", "registro", "historial", "reportes"];
   document.querySelectorAll(".nav-item")[pages.indexOf(page)]?.classList.add("active");
   if (page === "dashboard") updateDashboard();
   if (page === "historial") renderHistorial();
@@ -212,13 +124,14 @@ window.nextStep = function(n) {
   if (n === 2 && !validateStep1()) return;
   if (n === 3 && !validateStep2()) return;
   currentStep = n;
+
   document.getElementById("formStep1").classList.toggle("hidden", n !== 1);
   document.getElementById("formStep2").classList.toggle("hidden", n !== 2);
   document.getElementById("formStep3").classList.toggle("hidden", n !== 3);
 
-  [1,2,3].forEach(i => {
-    const el = document.getElementById("step"+i);
-    el.classList.remove("active","done");
+  [1, 2, 3].forEach(i => {
+    const el = document.getElementById("step" + i);
+    el.classList.remove("active", "done");
     if (i < n) el.classList.add("done");
     if (i === n) el.classList.add("active");
   });
@@ -227,8 +140,8 @@ window.nextStep = function(n) {
     initSig();
     const now = new Date();
     document.getElementById("fHoraEntrega").value =
-      now.getHours().toString().padStart(2,"0") + ":" +
-      now.getMinutes().toString().padStart(2,"0");
+      now.getHours().toString().padStart(2, "0") + ":" +
+      now.getMinutes().toString().padStart(2, "0");
   }
 };
 
@@ -276,12 +189,12 @@ window.guardarRegistro = async function() {
     horaEntrega:   document.getElementById("fHoraEntrega").value,
     responsable:   v("fResponsable"),
     firma:         getSigData(),
-    fechaDisplay:  now.toLocaleDateString("es-CO", {day:"2-digit",month:"2-digit",year:"numeric"}),
+    fechaDisplay:  now.toLocaleDateString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric" }),
     fechaRegistro: now.toISOString(),
   };
 
   const btn = document.querySelector("#formStep3 .btn-primary");
-  btn.disabled = true;
+  btn.disabled    = true;
   btn.textContent = "Guardando...";
 
   try {
@@ -297,15 +210,14 @@ window.guardarRegistro = async function() {
     goTo("historial");
   } catch (err) {
     console.error(err);
-    // Si falla Firestore, guardar en cola offline
     encolarOffline(registro);
-    toast("⚠️ Error de red — guardado en cola offline", "info");
+    toast("⚠️ Error — guardado en cola offline", "info");
     updateConnStatus();
     resetForm();
     goTo("historial");
   } finally {
-    btn.disabled = false;
-    btn.textContent = "💾 Guardar Registro";
+    btn.disabled    = false;
+    btn.textContent = "💾 Guardar en la Nube";
   }
 };
 
@@ -314,8 +226,8 @@ function resetForm() {
    "fNombre","fCedula","fCargo","fTel","fEmail","fResponsable"].forEach(id => {
     document.getElementById(id).value = "";
   });
-  document.getElementById("fArea").value = "";
-  document.getElementById("fEstado").value = "entregado";
+  document.getElementById("fArea").value    = "";
+  document.getElementById("fEstado").value  = "entregado";
   document.getElementById("fFechaLlegada").value = new Date().toISOString().split("T")[0];
   nextStep(1);
 }
@@ -330,9 +242,9 @@ function initSig() {
   sigCtx.fillStyle = "#1a2133";
   sigCtx.fillRect(0, 0, canvas.width, canvas.height);
   sigCtx.strokeStyle = "#00d4ff";
-  sigCtx.lineWidth = 2.5;
-  sigCtx.lineCap = "round";
-  sigCtx.lineJoin = "round";
+  sigCtx.lineWidth   = 2.5;
+  sigCtx.lineCap     = "round";
+  sigCtx.lineJoin    = "round";
 
   const getPos = (e) => {
     const r = canvas.getBoundingClientRect();
@@ -341,18 +253,13 @@ function initSig() {
   };
 
   canvas.onmousedown = canvas.ontouchstart = (e) => {
-    e.preventDefault();
-    sigDrawing = true;
-    const p = getPos(e);
-    sigCtx.beginPath();
-    sigCtx.moveTo(p.x, p.y);
+    e.preventDefault(); sigDrawing = true;
+    const p = getPos(e); sigCtx.beginPath(); sigCtx.moveTo(p.x, p.y);
   };
   canvas.onmousemove = canvas.ontouchmove = (e) => {
     e.preventDefault();
     if (!sigDrawing) return;
-    const p = getPos(e);
-    sigCtx.lineTo(p.x, p.y);
-    sigCtx.stroke();
+    const p = getPos(e); sigCtx.lineTo(p.x, p.y); sigCtx.stroke();
   };
   canvas.onmouseup = canvas.ontouchend = () => { sigDrawing = false; };
 }
@@ -439,7 +346,6 @@ function applyScannedValue(text) {
     });
     return;
   }
-
   const fieldMap = { oc: "fOC", mnt: "fMNT", cc: "fCC" };
   document.getElementById(fieldMap[scanTarget] || "fOC").value = t;
 }
@@ -501,7 +407,6 @@ window.eliminar = async function(docId) {
   try {
     await eliminarRegistroCloud(docId);
     toast("Registro eliminado", "info");
-    // El listener actualizará la vista automáticamente
   } catch (err) {
     toast("Error al eliminar: " + err.message, "error");
   }
@@ -529,17 +434,17 @@ window.verDetalle = function(docId) {
   document.getElementById("detalleContent").innerHTML = `
     <div class="detail-grid" style="margin-bottom:16px">
       <div class="detail-field"><div class="detail-label">OC</div><div class="detail-val text-accent">${r.oc}</div></div>
-      <div class="detail-field"><div class="detail-label">MNT</div><div class="detail-val">${r.mnt||"—"}</div></div>
+      <div class="detail-field"><div class="detail-label">MNT</div><div class="detail-val">${r.mnt || "—"}</div></div>
       <div class="detail-field"><div class="detail-label">Centro de Costos</div><div class="detail-val">${r.cc}</div></div>
       <div class="detail-field"><div class="detail-label">Descripción</div><div class="detail-val">${r.descripcion}</div></div>
-      <div class="detail-field"><div class="detail-label">Cantidad</div><div class="detail-val">${r.cantidad||"—"}</div></div>
-      <div class="detail-field"><div class="detail-label">Proveedor</div><div class="detail-val">${r.proveedor||"—"}</div></div>
+      <div class="detail-field"><div class="detail-label">Cantidad</div><div class="detail-val">${r.cantidad || "—"}</div></div>
+      <div class="detail-field"><div class="detail-label">Proveedor</div><div class="detail-val">${r.proveedor || "—"}</div></div>
       <div class="detail-field"><div class="detail-label">Receptor</div><div class="detail-val">${r.nombre}</div></div>
       <div class="detail-field"><div class="detail-label">Cédula</div><div class="detail-val">${r.cedula}</div></div>
       <div class="detail-field"><div class="detail-label">Área</div><div class="detail-val">${r.area}</div></div>
       <div class="detail-field"><div class="detail-label">Estado</div><div class="detail-val">${estadoBadge(r.estado)}</div></div>
       <div class="detail-field"><div class="detail-label">Responsable</div><div class="detail-val">${r.responsable}</div></div>
-      <div class="detail-field"><div class="detail-label">Fecha / Hora</div><div class="detail-val">${r.fechaDisplay} ${r.horaEntrega||""}</div></div>
+      <div class="detail-field"><div class="detail-label">Fecha / Hora</div><div class="detail-val">${r.fechaDisplay} ${r.horaEntrega || ""}</div></div>
     </div>
     ${r.observaciones ? `<div class="alert alert-info" style="margin-bottom:16px">📝 ${r.observaciones}</div>` : ""}
     <div>
@@ -558,7 +463,7 @@ window.closeDetalle = function() {
 // DASHBOARD
 // ═══════════════════════════════════════════════════════════════
 function updateDashboard() {
-  const today = new Date().toLocaleDateString("es-CO", {day:"2-digit",month:"2-digit",year:"numeric"});
+  const today = new Date().toLocaleDateString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric" });
   const hoy   = registros.filter(r => r.fechaDisplay === today);
 
   document.getElementById("statHoy").textContent   = hoy.length;
@@ -566,7 +471,7 @@ function updateDashboard() {
   document.getElementById("statPend").textContent  = registros.filter(r => r.estado === "pendiente").length;
   document.getElementById("statTotal").textContent = registros.length;
   document.getElementById("dash-date").textContent = new Date().toLocaleDateString("es-CO",
-    { weekday:"long", year:"numeric", month:"long", day:"numeric" });
+    { weekday: "long", year: "numeric", month: "long", day: "numeric" });
 
   renderBarChart();
   drawDonut();
@@ -577,30 +482,29 @@ function renderBarChart() {
   const bars = document.getElementById("chartBars");
   const days = [];
   for (let i = 6; i >= 0; i--) {
-    const d    = new Date(); d.setDate(d.getDate() - i);
-    const label = d.toLocaleDateString("es-CO", { weekday:"short", day:"2-digit" });
-    const disp  = d.toLocaleDateString("es-CO", { day:"2-digit", month:"2-digit", year:"numeric" });
+    const d     = new Date(); d.setDate(d.getDate() - i);
+    const label = d.toLocaleDateString("es-CO", { weekday: "short", day: "2-digit" });
+    const disp  = d.toLocaleDateString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric" });
     const count = registros.filter(r => r.fechaDisplay === disp).length;
     days.push({ label, count });
   }
   const maxVal = Math.max(...days.map(d => d.count), 1);
   bars.innerHTML = days.map(d => `
     <div class="bar-col">
-      <div class="bar" data-val="${d.count}" style="height:${Math.max((d.count/maxVal)*160, 4)}px"></div>
+      <div class="bar" data-val="${d.count}" style="height:${Math.max((d.count / maxVal) * 160, 4)}px"></div>
       <div class="bar-label">${d.label}</div>
     </div>
   `).join("");
 }
 
 function drawDonut() {
-  const canvas = document.getElementById("donutCanvas");
-  const ctx    = canvas.getContext("2d");
+  const canvas    = document.getElementById("donutCanvas");
+  const ctx       = canvas.getContext("2d");
   const entregado = registros.filter(r => r.estado === "entregado").length;
   const pendiente = registros.filter(r => r.estado === "pendiente").length;
   const novedad   = registros.filter(r => r.estado === "novedad").length;
   const total     = entregado + pendiente + novedad || 1;
-
-  const segments = [
+  const segments  = [
     { val: entregado, color: "#10b981", label: "Entregado" },
     { val: pendiente, color: "#f59e0b", label: "Pendiente" },
     { val: novedad,   color: "#ef4444", label: "Novedad"   },
@@ -612,14 +516,14 @@ function drawDonut() {
     if (!s.val) return;
     const angle = (s.val / total) * Math.PI * 2;
     ctx.beginPath();
-    ctx.arc(65,65,52,start,start+angle);
-    ctx.arc(65,65,32,start+angle,start,true);
+    ctx.arc(65, 65, 52, start, start + angle);
+    ctx.arc(65, 65, 32, start + angle, start, true);
     ctx.fillStyle = s.color;
     ctx.fill();
     start += angle;
   });
 
-  ctx.beginPath(); ctx.arc(65,65,32,0,Math.PI*2);
+  ctx.beginPath(); ctx.arc(65, 65, 32, 0, Math.PI * 2);
   ctx.fillStyle = "#111620"; ctx.fill();
   ctx.fillStyle = "#e8edf5";
   ctx.font = "bold 16px Syne,sans-serif";
@@ -668,55 +572,55 @@ window.exportarExcel = async function() {
     "Nombre","Cedula","Area","Cargo","Telefono","Email","Estado","HoraEntrega","Responsable","Observaciones"];
   const rows = data.map(r => [r.oc,r.mnt,r.cc,r.proveedor,r.descripcion,r.cantidad,r.guia,
     r.fechaLlegada,r.nombre,r.cedula,r.area,r.cargo,r.tel,r.email,r.estado,r.horaEntrega,r.responsable,r.observaciones]);
-  const csv = [headers,...rows].map(row =>
-    row.map(v => `"${(v||"").toString().replace(/"/g,'""')}"`).join(",")
+  const csv = [headers, ...rows].map(row =>
+    row.map(v => `"${(v || "").toString().replace(/"/g, '""')}"`).join(",")
   ).join("\n");
 
-  download("\uFEFF"+csv, `StoreDesk_${new Date().toISOString().slice(0,10)}.csv`, "text/csv;charset=utf-8");
+  download("\uFEFF" + csv, `StoreDesk_${new Date().toISOString().slice(0, 10)}.csv`, "text/csv;charset=utf-8");
   toast("✅ CSV descargado — ábrelo en Excel", "success");
 };
 
 window.exportarPDF = function() {
   if (!registros.length) { toast("No hay registros para exportar", "info"); return; }
   const { jsPDF } = window.jspdf;
-  const doc  = new jsPDF({ orientation:"landscape", unit:"mm", format:"a4" });
+  const doc   = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
   const pageW = doc.internal.pageSize.getWidth();
 
-  doc.setFillColor(17,22,32);
-  doc.rect(0,0,pageW,22,"F");
-  doc.setTextColor(0,212,255);
-  doc.setFontSize(16); doc.setFont("helvetica","bold");
+  doc.setFillColor(17, 22, 32);
+  doc.rect(0, 0, pageW, 22, "F");
+  doc.setTextColor(0, 212, 255);
+  doc.setFontSize(16); doc.setFont("helvetica", "bold");
   doc.text("StoreDesk — Reporte de Compras Directas", 10, 14);
-  doc.setFontSize(9); doc.setTextColor(180,190,210);
-  doc.text(`Generado: ${new Date().toLocaleString("es-CO")}   Total: ${registros.length} registros`, pageW-10, 14, { align:"right" });
+  doc.setFontSize(9); doc.setTextColor(180, 190, 210);
+  doc.text(`Generado: ${new Date().toLocaleString("es-CO")}   Total: ${registros.length} registros`, pageW - 10, 14, { align: "right" });
 
   let y = 30;
-  const cols = ["OC","MNT","CC","Receptor","Cédula","Área","Descripción","Estado","Fecha","Responsable"];
-  const widths = [30,22,25,35,25,25,40,22,22,28];
-  const getVals = r => [r.oc,r.mnt||"—",r.cc,r.nombre,r.cedula,r.area,r.descripcion,r.estado,r.fechaDisplay,r.responsable];
+  const cols   = ["OC","MNT","CC","Receptor","Cédula","Área","Descripción","Estado","Fecha","Responsable"];
+  const widths = [30, 22, 25, 35, 25, 25, 40, 22, 22, 28];
+  const getVals = r => [r.oc, r.mnt||"—", r.cc, r.nombre, r.cedula, r.area, r.descripcion, r.estado, r.fechaDisplay, r.responsable];
 
-  doc.setFillColor(26,33,51);
-  doc.rect(8, y-5, pageW-16, 8, "F");
-  doc.setTextColor(0,212,255); doc.setFontSize(7); doc.setFont("helvetica","bold");
+  doc.setFillColor(26, 33, 51);
+  doc.rect(8, y - 5, pageW - 16, 8, "F");
+  doc.setTextColor(0, 212, 255); doc.setFontSize(7); doc.setFont("helvetica", "bold");
   let x = 10;
-  cols.forEach((c,i) => { doc.text(c, x, y); x += widths[i]; });
+  cols.forEach((c, i) => { doc.text(c, x, y); x += widths[i]; });
   y += 6;
 
-  doc.setFont("helvetica","normal"); doc.setFontSize(7);
+  doc.setFont("helvetica", "normal"); doc.setFontSize(7);
   registros.forEach((r, idx) => {
     if (y > 190) { doc.addPage(); y = 20; }
-    doc.setFillColor(idx%2===0?17:20, idx%2===0?22:26, idx%2===0?32:38);
-    doc.rect(8, y-4, pageW-16, 7, "F");
-    doc.setTextColor(220,230,245);
+    doc.setFillColor(idx % 2 === 0 ? 17 : 20, idx % 2 === 0 ? 22 : 26, idx % 2 === 0 ? 32 : 38);
+    doc.rect(8, y - 4, pageW - 16, 7, "F");
+    doc.setTextColor(220, 230, 245);
     x = 10;
-    getVals(r).forEach((v,i) => {
-      doc.text(String(v||"—").substring(0, Math.floor(widths[i]/2.2)), x, y);
+    getVals(r).forEach((v, i) => {
+      doc.text(String(v || "—").substring(0, Math.floor(widths[i] / 2.2)), x, y);
       x += widths[i];
     });
     y += 7;
   });
 
-  doc.save(`StoreDesk_${new Date().toISOString().slice(0,10)}.pdf`);
+  doc.save(`StoreDesk_${new Date().toISOString().slice(0, 10)}.pdf`);
   toast("✅ PDF generado y descargado", "success");
 };
 
@@ -740,17 +644,17 @@ window.exportarRangoCSV = async function() {
   if (!data.length) { toast("No hay registros en ese rango", "info"); return; }
   const headers = ["OC","MNT","CC","Nombre","Cedula","Area","Estado","FechaLlegada","HoraEntrega","Responsable","Observaciones"];
   const rows    = data.map(r => [r.oc,r.mnt,r.cc,r.nombre,r.cedula,r.area,r.estado,r.fechaLlegada,r.horaEntrega,r.responsable,r.observaciones]);
-  const csv     = [headers,...rows].map(row =>
-    row.map(v => `"${(v||"").toString().replace(/"/g,'""')}"`).join(",")
+  const csv     = [headers, ...rows].map(row =>
+    row.map(v => `"${(v || "").toString().replace(/"/g, '""')}"`).join(",")
   ).join("\n");
 
-  download("\uFEFF"+csv, `StoreDesk_${desde||"inicio"}_${hasta||"hoy"}.csv`, "text/csv;charset=utf-8");
+  download("\uFEFF" + csv, `StoreDesk_${desde || "inicio"}_${hasta || "hoy"}.csv`, "text/csv;charset=utf-8");
   toast("✅ Reporte exportado", "success");
 };
 
 function download(content, filename, type) {
-  const a = document.createElement("a");
-  a.href  = URL.createObjectURL(new Blob([content], { type }));
+  const a   = document.createElement("a");
+  a.href    = URL.createObjectURL(new Blob([content], { type }));
   a.download = filename;
   a.click();
 }
@@ -759,8 +663,8 @@ function download(content, filename, type) {
 // TOAST
 // ═══════════════════════════════════════════════════════════════
 window.toast = function(msg, type = "info") {
-  const icons = { success:"✅", error:"❌", info:"ℹ️" };
-  const el = document.createElement("div");
+  const icons = { success: "✅", error: "❌", info: "ℹ️" };
+  const el    = document.createElement("div");
   el.className = `toast ${type}`;
   el.innerHTML = `${icons[type]} ${msg}`;
   document.getElementById("toastContainer").appendChild(el);
