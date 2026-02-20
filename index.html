@@ -22,7 +22,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet"/>
 
   <!-- Estilos -->
-  <link rel="stylesheet" href="./css/styles.css"/>
+  <link rel="stylesheet" href="/styles.css"/>
 
   <!-- Librerías externas -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js" defer></script>
@@ -410,7 +410,14 @@
         </div>
         <div class="field">
           <label>Filtrar por Área</label>
-          <select id="rptArea">
+          <select id="rptArea">rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /compras_directa/{docId} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
             <option value="">Todas las áreas</option>
             <option>Mantenimiento</option><option>Producción</option>
             <option>Operaciones</option><option>Ingeniería</option>
